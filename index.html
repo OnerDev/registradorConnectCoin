@@ -60,14 +60,23 @@
 
         button { 
             width: 100%; padding: 16px; border: none; border-radius: 12px; 
-            cursor: pointer; font-weight: bold; color: white; font-size: 16px;
+            cursor: pointer; font-weight: bold; color: white; font-size: 16px; transition: opacity 0.2s;
         }
+        button:active { opacity: 0.8; }
         
         .btn-login { background: var(--primary); }
         .btn-presenca { background: var(--sec); }
         .btn-adm { background: var(--adm); }
         .btn-link { background: none; color: #6c5ce7; text-decoration: none; margin-top: 10px; display: block; text-align: center;}
         
+        /* --- NOVO ESTILO PARA O BOTÃO DE BÔNUS --- */
+        .btn-bonus { 
+            background: #f1c40f; /* Dourado para destaque */
+            color: #2d3436; font-weight: 800;
+            margin-top: 10px;
+        }
+        /* ----------------------------------------- */
+
         .card-saldo { 
             background: var(--primary); color: white; text-align: center; 
             padding: 25px; border-radius: 20px; margin-bottom: 20px; 
@@ -85,16 +94,10 @@
         .config-item { margin-bottom: 15px; }
         .config-item label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 5px; color: #666; }
 
-        /* Estilo do Rodapé */
         footer {
-            margin-top: auto;
-            padding: 25px 15px;
-            color: white;
-            font-size: 12px;
-            text-align: center;
-            width: 100%;
-            opacity: 0.9;
-            letter-spacing: 0.5px;
+            margin-top: auto; padding: 25px 15px; color: white;
+            font-size: 12px; text-align: center; width: 100%;
+            opacity: 0.9; letter-spacing: 0.5px;
         }
     </style>
 </head>
@@ -147,6 +150,11 @@
     </select>
     <button class="btn-presenca" onclick="enviarPresenca()">Confirmar Presença</button>
     
+    <h3 style="margin-top:30px; margin-bottom: 5px;">🌟 Recompensa Especial</h3>
+    <p style="font-size: 0.85rem; color: #666; margin: 0 0 10px 0; line-height: 1.3;">
+        Atribua +10 pontos extras (comportamento, tarefas, etc) para o jovem selecionado acima.
+    </p>
+    <button class="btn-bonus" onclick="enviarPontosExtras()">Dar +10 Pontos Extras</button>
     <h3 style="margin-top:30px">🏆 Ranking Atual</h3>
     <table><tbody class="rank-body"></tbody></table>
 </div>
@@ -174,7 +182,7 @@
 </footer>
 
 <script>
-   const URL_API = "https://script.google.com/macros/s/AKfycbyTASGgq5lgt4bNizEXnjtJp_JkP7ckpldO2czV5Yfr7pk-Hz6zGUh0QTZgyQk-kRTveQ/exec"; 
+    const URL_API = "https://script.google.com/macros/s/AKfycbyEJQjOeeroun5pgQCzueNWf2Ex7YtkHSpOoHUXneUmCpZIWwK3GgVNAlCQ67UXbF014Q/exec"; 
     let listaUsuarios = [];
 
     // Função para buscar dados atualizados do servidor sem deslogar
@@ -185,7 +193,6 @@
             listaUsuarios = dados.usuarios;
             renderizarRankings();
             
-            // Se for um jovem, atualiza o saldo dele na tela
             const emailLogado = document.getElementById('email').value.trim().toLowerCase();
             const user = listaUsuarios.find(u => u.email.toLowerCase() === emailLogado);
             if (user && user.tipo === 'jovem') {
@@ -256,9 +263,12 @@
         btn.innerText = "Registrando...";
         btn.disabled = true;
 
-        const email = document.getElementById('lista-jovens').value;
+        const emailSelect = document.getElementById('lista-jovens');
+        const email = emailSelect.value;
         const atividade = document.getElementById('tipo-ativ').value;
         
+        if (!email) {alert("Selecione um jovem."); btn.innerText = originalText; btn.disabled = false; return;}
+
         try {
             await fetch(URL_API, { 
                 method: 'POST', 
@@ -267,8 +277,6 @@
             });
             
             alert("Presença registrada com sucesso!");
-            
-            // EM VEZ DE RELOAD, ATUALIZAMOS O RANKING
             await atualizarDadosLocais();
             
         } catch (e) {
@@ -279,39 +287,113 @@
         }
     }
 
-    // ... Manter as outras funções (renderizarRankings, carregarLider, enviarAutoCadastro, salvarDesignPermanente) iguais
+    // --- NOVA FUNÇÃO PARA ENVIAR PONTOS EXTRAS ---
+    async function enviarPontosExtras() {
+        const btn = document.querySelector('.btn-bonus');
+        const emailSelect = document.getElementById('lista-jovens');
+        const email = emailSelect.value;
+
+        if (!email) {alert("Selecione um jovem na lista acima primeiro."); return;}
+
+        // Obtém o nome do jovem selecionado para a mensagem de confirmação
+        const nomeJovem = emailSelect.options[emailSelect.selectedIndex].text;
+        const originalText = btn.innerText;
+
+        // Confirmação de segurança
+        if (!confirm(`ATENÇÃO:\nDeseja realmente dar +10 pontos extras para: ${nomeJovem}?`)) {
+            return;
+        }
+
+        btn.innerText = "Enviando bônus...";
+        btn.disabled = true;
+
+        try {
+            // Envia a nova ação 'pontos_extras' para o backend
+            await fetch(URL_API, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({
+                    acao: 'pontos_extras', 
+                    email: email,
+                    valor: 10
+                }) 
+            });
+            
+            alert(`Sucesso! +10 pontos enviados para ${nomeJovem}.`);
+            // Atualiza o ranking na tela imediatamente
+            await atualizarDadosLocais();
+            
+        } catch (e) {
+            alert("Erro ao enviar pontos extras.");
+            console.error(e);
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    }
+    // ---------------------------------------------
+
     function renderizarRankings() {
         const ranking = [...listaUsuarios].filter(x => x.tipo === 'jovem').sort((a,b) => b.saldo - a.saldo);
-        const html = ranking.map((x, i) => `<tr><td>${i+1}º</td><td>${x.nome}</td><td>${x.saldo} CC</td></tr>`).join('');
+        const html = ranking.map((x, i) => `<tr><td>${i+1}º</td><td>${x.nome}</td><td><strong>${x.saldo}</strong> CC</td></tr>`).join('');
         document.querySelectorAll(".rank-body").forEach(tb => tb.innerHTML = html);
     }
 
     function carregarLider() {
         const select = document.getElementById('lista-jovens');
-        select.innerHTML = listaUsuarios.filter(u => u.tipo === 'jovem').map(j => `<option value="${j.email}">${j.nome}</option>`).join('');
+        // Adiciona uma opção vazia inicial
+        let options = '<option value="" disabled selected>Selecione um Jovem...</option>';
+        options += listaUsuarios.filter(u => u.tipo === 'jovem').map(j => `<option value="${j.email}">${j.nome}</option>`).join('');
+        select.innerHTML = options;
     }
 
     async function enviarAutoCadastro() {
-        const nome = document.getElementById('self-nome').value;
-        const email = document.getElementById('self-email').value;
+        const btn = document.querySelector('#tela-auto-cadastro .btn-presenca');
+        const nome = document.getElementById('self-nome').value.trim();
+        const email = document.getElementById('self-email').value.trim().toLowerCase();
         const senha = document.getElementById('self-senha').value;
-        if(!nome || !email || !senha) return alert("Preencha todos os campos!");
-        await fetch(URL_API, { method: 'POST', mode: 'no-cors', body: JSON.stringify({acao:'cadastrar', nome, email, senha, tipo:'jovem'}) });
-        alert("Conta criada!"); mostrarLogin();
+
+        if(!nome || !email || !senha) { return alert("Por favor, preencha todos os campos!"); }
+
+        btn.disabled = true;
+        btn.innerText = "Criando conta... aguarde";
+
+        try {
+            await fetch(URL_API, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({acao: 'cadastrar', nome, email, senha, tipo: 'jovem'}) 
+            });
+
+            alert("Conta criada com sucesso! Agora você pode fazer login.");
+            document.getElementById('self-nome').value = "";
+            document.getElementById('self-email').value = "";
+            document.getElementById('self-senha').value = "";
+            mostrarLogin();
+        } catch (e) {
+            console.error(e);
+           alert("Erro ao realizar cadastro. Tente novamente.");
+        } finally {
+           btn.disabled = false;
+           btn.innerText = "Finalizar Cadastro";
+        }
     }
 
     async function salvarDesignPermanente() {
+        const btn = document.querySelector('.btn-adm');
+        btn.innerText = "Salvando..."; btn.disabled = true;
         const cor = document.getElementById('cfg-color-main').value;
         const tema = document.getElementById('cfg-txt-tema').value;
-        await fetch(URL_API, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({acao: 'salvarDesign', cor, tema})
-        });
-        alert("Design salvo!");
-        // Aqui você pode decidir se quer reload ou apenas aplicar a cor via JS
-        document.documentElement.style.setProperty('--primary', cor);
-        document.documentElement.style.setProperty('--bg-page', cor);
+        try {
+            await fetch(URL_API, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({acao: 'salvarDesign', cor, tema})
+            });
+            alert("Design salvo com sucesso!");
+            document.documentElement.style.setProperty('--primary', cor);
+            document.documentElement.style.setProperty('--bg-page', cor);
+        } catch(e) {alert("Erro ao salvar");}
+        finally { btn.innerText = "Salvar para Todos"; btn.disabled = false; }
     } 
 </script>
 </body>
